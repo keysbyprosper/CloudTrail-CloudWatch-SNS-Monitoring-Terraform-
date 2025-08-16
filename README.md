@@ -1,65 +1,67 @@
-📜 CloudTrail + CloudWatch + SNS Monitoring (Terraform)
+# 📜 CloudTrail + CloudWatch + SNS Monitoring (Terraform)
 
-This Terraform configuration sets up an alerting pipeline to detect when AWS Systems Manager (SSM) Parameter Store parameters are accessed via the GetParameter API.
+This Terraform configuration sets up an **alerting pipeline** to detect when **AWS Systems Manager (SSM) Parameter Store** parameters are accessed via the `GetParameter` API.
 
-The system uses:
+---
 
-CloudTrail to capture API calls
+## 🛠️ System Components
 
-CloudWatch Logs & Metric Filters to detect specific events
+- **CloudTrail** → Captures API calls  
+- **CloudWatch Logs & Metric Filters** → Detects specific events  
+- **CloudWatch Alarms** → Triggers on suspicious activity  
+- **SNS** → Sends notifications via email  
 
-CloudWatch Alarms to trigger on suspicious activity
+---
 
-SNS to notify you via email
+## 🗂 Project Structure
 
-🗂 Project Structure
+```text
 .
 ├─ providers.tf   # AWS provider, region, and identity data
 ├─ cloudtrail.tf  # CloudTrail setup + S3 bucket + IAM role/policies
 ├─ cloudwatch.tf  # Log group, metric filter, and alarm definition
 ├─ sns.tf         # SNS topic and email subscription
+```
 
-⚙️ What This Does
+---
 
-CloudTrail
+## ⚙️ What This Does
 
-Creates an S3 bucket for CloudTrail logs.
+### 🔹 CloudTrail
+- Creates an **S3 bucket** for CloudTrail logs  
+- Configures CloudTrail to **capture API activity**  
+- Sends logs to a **CloudWatch Log Group**  
 
-Configures CloudTrail to capture API activity.
+### 🔹 CloudWatch
+- Creates a log group for CloudTrail events  
+- Defines a **metric filter** for SSM `GetParameter` calls:
 
-Sends logs to a CloudWatch Log Group.
-
-CloudWatch
-
-Creates a log group for CloudTrail events.
-
-Sets up a metric filter that looks for SSM GetParameter events:
-
+```json
 { ($.eventSource = "ssm.amazonaws.com") && ($.eventName = "GetParameter") }
+```
 
+- Sets up an **alarm** when ≥ 1 `GetParameter` event occurs within 1 minute  
 
-Creates an alarm that triggers if ≥ 1 GetParameter event occurs in a 1-minute window.
+### 🔹 SNS
+- Creates an SNS topic  
+- Subscribes your email for alerts  
 
-SNS
+---
 
-Creates an SNS topic.
+## 📦 Prerequisites
 
-Subscribes your email to receive alerts.
+- [Terraform](https://developer.hashicorp.com/terraform/downloads) v1.5+  
+- [AWS CLI](https://docs.aws.amazon.com/cli/) configured with credentials  
+- A **globally unique** S3 bucket name for CloudTrail logs  
+- A **valid email** for SNS subscription  
 
-📦 Prerequisites
+---
 
-Terraform v1.5+
+## 🚀 Deployment
 
-AWS CLI configured with credentials
+1. **Set variables** in `variables.tf` or override at runtime:
 
-A globally unique S3 bucket name for CloudTrail logs
-
-A valid email address for SNS subscription
-
-🚀 Deployment
-
-Set variables (either in variables.tf or via CLI). For example:
-
+```hcl
 variable "cloudtrail_bucket_name" {
   default = "your-unique-cloudtrail-bucket"
 }
@@ -67,57 +69,75 @@ variable "cloudtrail_bucket_name" {
 variable "sns_email" {
   default = "your-email@example.com"
 }
+```
 
+2. **Initialize & apply**:
 
-Initialize and apply:
-
+```bash
 terraform init
 terraform apply
+```
 
+3. **Confirm SNS subscription** in your email inbox  
 
-Confirm your SNS subscription from the email AWS sends you.
-(Until you confirm, alarms won’t deliver notifications.)
+> ⚠️ Until you confirm, alarms won’t notify you.  
 
-🧪 Testing
+---
 
-Run a simple SSM Parameter Store call:
+## 🧪 Testing
 
+1. Run:
+
+```bash
 aws ssm get-parameter --name <your-parameter-name>
+```
 
+2. Go to **CloudWatch → Metrics → GetParameterCountNamespace → GetParameterCount**  
 
-Go to CloudWatch → Metrics → GetParameterCountNamespace → GetParameterCount
-You should see the metric increment.
+3. Within ~1 min the **alarm** should enter `ALARM` state and send you an email  
 
-Within ~1 minute, the alarm will enter ALARM state and send you an email.
+---
 
-📤 Outputs
+## 📤 Outputs
 
-After a successful terraform apply, you’ll see:
+After a successful `terraform apply`, you’ll see:
 
-cloudtrail_bucket_name – S3 bucket name storing CloudTrail logs
+- `cloudtrail_bucket_name` → S3 bucket for CloudTrail logs  
+- `cloudwatch_log_group` → Log group for CloudTrail events  
+- `sns_topic_arn` → SNS topic ARN  
 
-cloudwatch_log_group – Log group receiving CloudTrail events
+---
 
-sns_topic_arn – SNS topic ARN for notifications
+## 🧹 Cleanup
 
-🧹 Cleanup
-
-To destroy all resources:
-
+```bash
 terraform destroy
+```
 
-🔒 Notes & Next Steps
+---
 
-Log group retention defaults to 90 days (can be adjusted).
+## 🔒 Notes & Next Steps
 
-This setup is a baseline pattern — you can add more metric filters, e.g.:
+- Log group retention = **90 days** (customizable)  
+- Extend with more metric filters:
+  - Unauthorized API calls → `{ $.errorCode = "AccessDenied*" }`  
+  - Console logins → `{ $.eventName = "ConsoleLogin" }`  
+  - Root user usage → `{ $.userIdentity.type = "Root" }`  
+- SNS can forward to Slack, PagerDuty, or Lambda  
 
-Unauthorized API calls: { $.errorCode = "AccessDenied*" }
+---
 
-Console logins: { $.eventName = "ConsoleLogin" }
+## 📊 Architecture Overview
 
-Root user usage: { $.userIdentity.type = "Root" }
+```mermaid
+flowchart LR
+    A[CloudTrail] --> B[CloudWatch Logs]
+    B --> C[Metric Filter]
+    C --> D[CloudWatch Alarm]
+    D --> E[SNS Topic]
+    E --> F[(Email Notification)]
+```
 
-SNS can be extended to trigger Slack, PagerDuty, or Lambda.
+---
 
-✅ With this setup you now have an auditable, automated way to detect and alert on sensitive SSM Parameter Store usage.
+✅ With this setup you now have an **auditable, automated alerting system** for sensitive SSM Parameter Store usage.
